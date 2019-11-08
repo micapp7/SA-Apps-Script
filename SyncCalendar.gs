@@ -25,6 +25,7 @@ function scheduleShifts() {
       eventCal.createEvent(name, startTime, endTime)
         .setLocation(element[4])
         .setDescription(description);
+  
     }
   });
 }

@@ -12,9 +12,6 @@ function register() {
   
   var selectedRowIndex = responsesSheet.getActiveCell().getRowIndex() - 1
   var selectedColIndex = responsesSheet.getActiveCell().getColumn()
- 
-  // var email = rawRows[selectedRowIndex][6];
-  // MailApp.sendEmail(email, 'Hey ' + rawRows[selectedRowIndex][1] + '!','This is the body of the message');
 
   var newRow = [];
   rawRows[selectedRowIndex].forEach(function(item, index) {
