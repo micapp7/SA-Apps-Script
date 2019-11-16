@@ -4,8 +4,8 @@ var startTime = new Date();
 var endTime = new Date();
 
 // Set date range to delete events a month before and after today
-startTime.setMonth(startTime.getMonth() - 1);
-endTime.setMonth(endTime.getMonth() + 1);
+startTime.setMonth(startTime.getMonth() - 2);
+endTime.setMonth(endTime.getMonth() + 2);
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
@@ -21,26 +21,65 @@ function onOpen() {
       .addItem('Register Selected Rows', 'registerRow'))
     .addSeparator()
     .addToUi();
+  
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var form = FormApp.openByUrl('https://docs.google.com/forms/d/1OtJysl51gywNrAXyEfTj12TCNInjfLu1OeN8HLmsb5k/edit');
+
+    ScriptApp.newTrigger('onSubmit')
+    .forForm(form)
+    .onFormSubmit()
+    .create();
+  
+    formatSheet();
 }
+
+// This will run when the form is submitted.
+function onSubmit() {
+  formatSheet();
+}
+
+function formatSheet() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  
+  var range = sheet.getDataRange();
+   range.setHorizontalAlignment("Center");
+  
+  var columnHeaders = sheet.getRange(1, range.getLastColumn());
+  
+  var bold = SpreadsheetApp.newTextStyle()
+  .setBold(true)
+  .build()
+  
+  columnHeaders.setTextStyle(bold);
+
+  var startTimeColumn = sheet.getRange("I2:I");
+  startTimeColumn.setNumberFormat('hh:mm A/P".M."');
+  
+  var endTimeColumn = sheet.getRange("J2:J");
+  endTimeColumn.setNumberFormat('hh:mm A/P".M."');
+}
+
 
 function syncCalendars() {
   // Get sheets from current spreadsheet.
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const regSheet = spreadsheet.getSheetByName('Registration');
+  const regSheet = spreadsheet.getSheetByName('Responses');
   const regData = regSheet.getDataRange().getValues().filter(function (element, i) {
     return i > 0;
   })
+  
+  const locationValues = spreadsheet.getSheetByName('Location').getDataRange().getValues();
 
   regData.forEach(function (element) {
     regObj = {
-      name: element[0] + " " + element[1],
-      phone: element[3],
-      email: element[4],
-      groupName: element[2],
-      location: element[6],
-      date: new Date(element[5]),
-      startTime: new Date(element[7]),
-      endTime: new Date(element[8]),
+      name: element[1] + " " + element[2],
+      groupName: element[3],
+      phone: element[4],
+      email: element[5],
+      date: new Date(element[6]),
+      location: element[7],
+      startTime: new Date(element[8]),
+      endTime: new Date(element[9]),
       validDateRange: false,
       toString: ""
     }
@@ -65,25 +104,33 @@ function syncCalendars() {
     if (element.startTime.valueOf() < element.endTime.valueOf()) { element.validDateRange = true; }
 
   })
-
-  // Filter out duplicate location elements
-  const allLocations = regArray.map(function (element) {
-    return element.location;
-  })
-
-  const uniqueLocations = allLocations.filter(getUniqueelements).sort();
+  
 
   // Get all calendars.
   const allCalendars = CalendarApp.getAllCalendars()
+  Logger.log("All Calendars:");
+  allCalendars.forEach(function(element) {Logger.log(element.getName())});
+  
+  const locations = locationValues.map(function(element) {
+    return element[0];
+  }).sort();
+  
+  Logger.log("Locations: " + locations);
+  
 
   // Get existing calendars based on calendar names.
-  const existingCalendars = allCalendars.filter(function (calendar) {
-    return uniqueLocations.indexOf(calendar.getName()) >= 0;
-
+  const existingCalendars = allCalendars.filter(function(calendar) {
+   
+    return locations.indexOf(calendar.getName()) >= 0;
   });
+  
 
-  // Sort existing calendars to match unique locations (this will ensure that dictionary is setup correctly)
+
+  
+  Logger.log("Existing Calendars:");
+  // Sort existing calendars to match locations (this will ensure that dictionary is setup correctly)
   existingCalendars.sort(sortByName);
+  existingCalendars.forEach(function(element) {Logger.log(element.getName())});
 
   function sortByName(a, b) {
     var nameA = a.getName().toLowerCase(), nameB = b.getName().toLowerCase()
@@ -97,7 +144,7 @@ function syncCalendars() {
   const locCalendarObject = {}; // just a dictionary
 
   // Use unique locations to add entries (This depends on sorted cal list)
-  uniqueLocations.forEach(function (key, i) {
+  locations.forEach(function (key, i) {
     locCalendarObject[key] = existingCalendars[i];
   });
 
@@ -106,20 +153,28 @@ function syncCalendars() {
   });
 
   // Get names of locations without calendars
-  const noCalendarLocations = uniqueLocations.filter(function (element) {
+  const noCalendarLocations = locations.filter(function (element) {
     return existingCalendarNames.indexOf(element) < 0;
   });
 
   // If no existing calendars exist
   if (existingCalendars.length == 0) {
-    // Create a calendar for each unique location
-    uniqueLocations.forEach(function (key, i) {
+    
+    Logger.log('No existing calendars found');
+    // Create a calendar for each location
+    locations.forEach(function (key, i) {
       locCalendarObject[key] = CalendarApp.createCalendar(key);
     });
+    
+    createCalendarEvents();
 
   } else if (noCalendarLocations.length == 0) {
     // If no new calendars need to be created, simply create calendar events using existing calendars
+    Logger.log('Existing calendars found!');
+    Logger.log('No calendars need to be created');
     createCalendarEvents();
+
+
 
   } else {
     // We have some locations without calendars so let's create calendars for those locations
@@ -131,9 +186,6 @@ function syncCalendars() {
     createCalendarEvents()
   }
 
-  function getUniqueelements(value, index, self) {
-    return self.indexOf(value) === index;
-  }
 
   function createCalendarEvents() {
     // Get the start and end times
@@ -153,6 +205,7 @@ function syncCalendars() {
         existingCalendars.forEach(function (element) {
           const events = element.getEvents(startTime, endTime);
           events.forEach(function (event) {
+            Logger.log(event.getTitle());
             event.deleteEvent();
           });
         });
@@ -211,47 +264,33 @@ function syncCalendars() {
     return duplicateEventElements
   }
 
-function registerRow() {
-  const spreadSheet = SpreadsheetApp.getActiveSpreadsheet();
-
-  const responsesSheet = spreadSheet.getSheetByName('Responses');
-  const responseRows = responsesSheet.getDataRange().getValues();
-  
-  const regSheet= spreadSheet.getSheetByName('Registration');
-                                                                                     
-  const selectedRowIndex = responsesSheet.getActiveCell().getRowIndex() - 1            
-
-  var newRow = [];
-  responseRows[selectedRowIndex].forEach(function (element, index) {
-    // Only move specific row data to registration sheet
-    if (index == 1 || index == 2 || index == 3 || index == 4 || index == 6 || index == 7 || index == 11) {
-      newRow.push(element);
-    }
-  });
-
-  Logger.log(newRow);
-  regSheet.appendRow(newRow);
-}
-
 function sendToEmailSheet() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const regSheet = spreadsheet.getSheetByName('Registration');
-  const emailListSheet = spreadsheet.getSheetByName('Email List');
-  const selectedDate = regSheet.getRange('J2').getValue();
+  const regSheet = spreadsheet.getSheetByName('Responses');
+  var emailListSheet = spreadsheet.getSheetByName('Email');
+  const selectedDate = regSheet.getRange('P2').getValue();
   const headerRowData = regSheet.getRange('A1:I1').getValues();
 
   regData= regSheet.getDataRange().getValues().filter(function (_, i) { return i > 0 });
+  
+  if(emailListSheet != null) {
+    spreadsheet.deleteSheet(emailListSheet);
+    
+  }
+  
+  emailListSheet = spreadsheet.insertSheet();
+  emailListSheet.setName('Email');
 
   const matchingRows = regData.filter(function (element) {
-    return element[5].valueOf() === selectedDate.valueOf()
+    return element[6].valueOf() === selectedDate.valueOf()
   });
 
-  emailListSheet.clearContents();
-  emailListSheet.clearNotes();
-  emailListSheet.getDataRange().setDataValidation(null);
   emailListSheet.appendRow(headerRowData[0]);
 
   matchingRows.forEach(function (element) {
     emailListSheet.appendRow(element);
   });
+  
+  spreadsheet.setActiveSheet(emailListSheet);
 }
+    
