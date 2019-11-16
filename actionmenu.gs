@@ -2,6 +2,8 @@ var regArray = [];
 var regObj = {};
 var startTime = new Date();
 var endTime = new Date();
+var SEND_TO_EMAIL_PROMPT_MESSAGE = "Please select volunteers by date (mm/dd/yyyy)";
+var SEND_TO_EMAIL_TITLE = "SEND TO EMAIL SHEET";
 
 // Set date range to delete events a month before and after today
 startTime.setMonth(startTime.getMonth() - 2);
@@ -16,10 +18,6 @@ function onOpen() {
     .addSeparator()
     .addSubMenu(ui.createMenu('Email')
       .addItem('Send To Email Sheet', 'sendToEmailSheet'))
-    .addSeparator()
-    .addSubMenu(ui.createMenu('Registration')
-      .addItem('Register Selected Rows', 'registerRow'))
-    .addSeparator()
     .addToUi();
   
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -267,30 +265,42 @@ function syncCalendars() {
 function sendToEmailSheet() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const regSheet = spreadsheet.getSheetByName('Responses');
-  var emailListSheet = spreadsheet.getSheetByName('Email');
-  const selectedDate = regSheet.getRange('P2').getValue();
-  const headerRowData = regSheet.getRange('A1:I1').getValues();
+  const emailListSheet = spreadsheet.getSheetByName('Email');
+  var selectedDate;
+ 
+  const headerRowData = regSheet.getRange('A1:N1').getValues();
+  const ui = SpreadsheetApp.getUi();
 
   regData= regSheet.getDataRange().getValues().filter(function (_, i) { return i > 0 });
   
-  if(emailListSheet != null) {
-    spreadsheet.deleteSheet(emailListSheet);
+  const response = ui.prompt(SEND_TO_EMAIL_TITLE, SEND_TO_EMAIL_PROMPT_MESSAGE, ui.ButtonSet.OK_CANCEL);
+  
+  if(response.getSelectedButton() == ui.Button.OK) {
+
+    if(emailListSheet != null) {
+      spreadsheet.deleteSheet(emailListSheet);
+    }
     
+     selectedDate = new Date(response.getResponseText())
+     const matchingRows = regData.filter(function (element) {
+        return element[6].valueOf() === selectedDate.valueOf()
+    });
+    
+    if(matchingRows.length > 0 ) {
+
+     var newSheet = spreadsheet.insertSheet('Email');
+     newSheet.appendRow(headerRowData[0]);
+    
+     matchingRows.forEach(function (element, index) {
+
+        newSheet.appendRow(element);
+      });
+    
+      spreadsheet.setActiveSheet(newSheet);
+    } else {
+        ui.alert('No volunteers exist with selected date. please try again.')
+        sendToEmailSheet();
+    }
   }
-  
-  emailListSheet = spreadsheet.insertSheet();
-  emailListSheet.setName('Email');
-
-  const matchingRows = regData.filter(function (element) {
-    return element[6].valueOf() === selectedDate.valueOf()
-  });
-
-  emailListSheet.appendRow(headerRowData[0]);
-
-  matchingRows.forEach(function (element) {
-    emailListSheet.appendRow(element);
-  });
-  
-  spreadsheet.setActiveSheet(emailListSheet);
 }
     
